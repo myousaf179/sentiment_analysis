@@ -3,7 +3,7 @@ import joblib
 import os
 
 # Load trained pipeline (trainable_file.joblib)
-model_path = os.path.join(os.path.dirname(file), "trainable_file.joblib")
+model_path = os.path.join(os.path.dirname(__file__), "trainable_file.joblib")
 pipeline = joblib.load(model_path)
 
 st.set_page_config(page_title="IMDB Sentiment Tester", layout="centered")
@@ -28,4 +28,5 @@ if submitted:
             st.markdown(f"*Prediction:* :{'green' if sentiment=='Positive' else 'red'}[{sentiment}]")
         except Exception as e:
             st.error(f"Error: {e}")
+
 
