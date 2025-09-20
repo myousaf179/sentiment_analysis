@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IMDB Sentiment Tester</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width:900px; margin:40px auto; padding:0 20px; color:#222; }
+    h1 { text-align:center; }
+    .card { border:1px solid #e0e0e0; border-radius:8px; padding:18px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+    textarea { width:100%; height:140px; padding:10px; font-size:14px; border-radius:6px; border:1px solid #ccc; resize:vertical; }
+    .controls { margin-top:12px; display:flex; gap:8px; align-items:center; }
+    button { padding:10px 16px; border-radius:6px; border:none; cursor:pointer; background:#007bff; color:white; }
+    button:disabled { background:#9bbff7; cursor:default; }
+    .result { margin-top:18px; }
+    .label { font-weight:700; font-size:1.1rem; }
+    .positive { color: #0b6623; }
+    .negative { color: #b22222; }
+    .metrics { margin-top:10px; display:flex; gap:12px; flex-wrap:wrap; }
+    .metric { background:#f6f8fb; padding:8px 12px; border-radius:6px; border:1px solid #eee; }
+    .loader { display:inline-block; width:18px; height:18px; border:3px solid #fff; border-radius:50%; border-top-color: #007bff; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .small { font-size:0.9rem; color:#555; }
+  </style>
+</head>
+<body>
+  <h1>IMDB Sentiment Tester</h1>
+
+  <div class="card">
+    <form id="predictForm">
+      <label for="review" class="small">Enter movie review text to test the model:</label>
+      <textarea id="review" name="review" placeholder="Type or paste a review...">The movie was fantastic, with a gripping storyline and excellent acting.</textarea>
+
+      <div class="controls">
+        <button id="predictBtn" type="submit">Predict</button>
+        <div id="status" style="margin-left:10px"></div>
+      </div>
+    </form>
+
+    <div id="result" class="result" style="display:none">
+      <div>
+        <span class="label">Prediction:</span>
+        <span id="predLabel" style="margin-left:8px" class=""></span>
+        <span id="probText" style="margin-left:12px" class="small"></span>
+      </div>
+
+      <div class="metrics" id="metrics">
+        <!-- Accuracy, Precision, Recall, F1 will be inserted here -->
+      </div>
+
+      <div id="confusion" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('predictForm');
+    const predictBtn = document.getElementById('predictBtn');
+    const statusDiv = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+    const predLabelSpan = document.getElementById('predLabel');
+    const probTextSpan = document.getElementById('probText');
+    const metricsDiv = document.getElementById('metrics');
+    const confusionDiv = document.getElementById('confusion');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const reviewText = document.getElementById('review').value.trim();
+      if (!reviewText) {
+        alert('Please enter a review text.');
+        return;
+      }
+
+      // UI: show loading
+      predictBtn.disabled = true;
+      statusDiv.innerHTML = '<span class="loader"></span> Predicting...';
+      resultDiv.style.display = 'none';
+      metricsDiv.innerHTML = '';
+      confusionDiv.innerHTML = '';
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ review: reviewText })
+        });
+
+        if (!response.ok) {
+          const txt = await response.text();
+          throw new Error('Server error: ' + txt);
+        }
+
+        const data = await response.json();
+        // Example expected response JSON:
+        // { prediction: "Positive", probability: 0.87, metrics: { accuracy:0.9, precision:0.92, recall:0.88, f1:0.90 }, confusion: [[TN,FP],[FN,TP]] }
+
+        // Show prediction
+        predLabelSpan.textContent = data.prediction || 'N/A';
+        predLabelSpan.className = data.prediction && data.prediction.toLowerCase().includes('pos') ? 'positive' : 'negative';
+        probTextSpan.textContent = data.probability !== undefined ? ` (prob: ${(100 * data.probability).toFixed(1)}%)` : '';
+
+        // Show metrics
+        if (data.metrics) {
+          const m = data.metrics;
+          metricsDiv.innerHTML = `
+            <div class="metric">Accuracy: ${ (m.accuracy ?? 'N/A') }</div>
+            <div class="metric">Precision: ${ (m.precision ?? 'N/A') }</div>
+            <div class="metric">Recall: ${ (m.recall ?? 'N/A') }</div>
+            <div class="metric">F1-score: ${ (m.f1 ?? 'N/A') }</div>
+          `;
+        }
+
+        // Show confusion matrix if provided
+        if (data.confusion) {
+          const cm = data.confusion;
+          confusionDiv.innerHTML = `
+            <div class="small"><strong>Confusion Matrix (rows=actual, cols=predicted)</strong></div>
+            <table style="border-collapse:collapse;margin-top:6px">
+              <tr>
+                <td style="border:1px solid #ddd;padding:6px 10px"> </td>
+                <td style="border:1px solid #ddd;padding:6px 10px">Pred: Neg</td>
+                <td style="border:1px solid #ddd;padding:6px 10px">Pred: Pos</td>
+              </tr>
+              <tr>
+                <td style="border:1px solid #ddd;padding:6px 10px">Actual: Neg</td>
+                <td style="border:1px solid #ddd;padding:6px 10px">${cm[0][0]}</td>
+                <td style="border:1px solid #ddd;padding:6px 10px">${cm[0][1]}</td>
+              </tr>
+              <tr>
+                <td style="border:1px solid #ddd;padding:6px 10px">Actual: Pos</td>
+                <td style="border:1px solid #ddd;padding:6px 10px">${cm[1][0]}</td>
+                <td style="border:1px solid #ddd;padding:6px 10px">${cm[1][1]}</td>
+              </tr>
+            </table>
+          `;
+        }
+
+        resultDiv.style.display = 'block';
+        statusDiv.innerHTML = '';
+      } catch (err) {
+        statusDiv.innerHTML = '';
+        alert('Error: ' + err.message);
+      } finally {
+        predictBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
