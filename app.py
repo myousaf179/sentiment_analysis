@@ -1,38 +1,30 @@
-from flask import Flask, request, jsonify, send_from_directory
+import streamlit as st
 import joblib
 import os
 
-# Flask app init
-app = Flask(__name__, static_folder='.', static_url_path='')
-
 # Load trained pipeline (trainable_file.joblib)
-model_path = os.path.join(os.path.dirname(__file__), "trainable_file.joblib")
+model_path = os.path.join(os.path.dirname(_file_), "trainable_file.joblib")
 pipeline = joblib.load(model_path)
 
-# Serve HTML page
-@app.route("/")
-def index():
-    return send_from_directory(".", "MovieReviewApp.html")
+st.set_page_config(page_title="IMDB Sentiment Tester", layout="centered")
+st.title("IMDB Sentiment Tester")
+st.write("Enter a movie review below to predict its sentiment.")
 
-# Prediction API
-@app.route("/predict", methods=["POST"])
-def predict():
-    try:
-        data = request.get_json()
-        review_text = data.get("review", "")
+with st.form("sentiment_form"):
+    review_text = st.text_area(
+        "Movie Review Text:",
+        "The movie was fantastic, with a gripping storyline and excellent acting.",
+        height=150
+    )
+    submitted = st.form_submit_button("Predict")
 
-        if not review_text.strip():
-            return jsonify({"error": "Empty review text"}), 400
-
-        # Predict (1 = Positive, 0 = Negative)
-        pred_label = pipeline.predict([review_text])[0]
-
-        return jsonify({
-            "prediction": "Positive" if pred_label == 1 else "Negative"
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+if submitted:
+    if not review_text.strip():
+        st.error("Please enter a review text.")
+    else:
+        try:
+            pred_label = pipeline.predict([review_text])[0]
+            sentiment = "Positive" if pred_label == 1 else "Negative"
+            st.markdown(f"*Prediction:* :{'green' if sentiment=='Positive' else 'red'}[{sentiment}]")
+        except Exception as e:
+            st.error(f"Error: {e}")
